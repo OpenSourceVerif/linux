@@ -23966,8 +23966,8 @@ int bpf_check(struct bpf_prog **prog, union bpf_attr *attr, bpfptr_t uattr,
 	if (bpf_prog_reenters_datapath(env->prog))
 		env->stack_limit = MAX_BPF_STACK;
 
-	env->allow_ptr_leaks = bpf_allow_ptr_leaks(env->prog->aux->token);
-	env->allow_uninit_stack = bpf_allow_uninit_stack(env->prog->aux->token);
+	env->allow_ptr_leaks = false;
+	env->allow_uninit_stack = false;
 	env->bypass_spec_v1 = bpf_bypass_spec_v1(env->prog->aux->token);
 	env->bypass_spec_v4 = bpf_bypass_spec_v4(env->prog->aux->token);
 	env->bpf_capable = is_priv = bpf_token_capable(env->prog->aux->token, CAP_BPF);
