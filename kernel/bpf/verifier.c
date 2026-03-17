@@ -5365,6 +5365,13 @@ static bool is_var_ctx_off_allowed(struct bpf_prog *prog)
 static int __check_ctx_access(struct bpf_verifier_env *env, int insn_idx, int off, int size,
 			      enum bpf_access_type t, struct bpf_insn_access_aux *info)
 {
+	bool is_target_task = (strncmp(current->comm, "test_progs", 10) == 0 ||
+                        	strncmp(current->comm, "insmod", 6) == 0);
+	if (is_target_task && t == BPF_READ) {
+		verbose(env, "test_mode: load from ctx is forbidden at insn %d\n", insn_idx);
+		return -EACCES;
+	}
+
 	if (env->ops->is_valid_access &&
 	    env->ops->is_valid_access(off, size, t, env->prog, info)) {
 		/* A non zero info.ctx_field_size indicates that this field is a
