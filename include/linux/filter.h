@@ -1996,6 +1996,8 @@ int __bpf_sock_ops_store_hdr_opt(struct bpf_sock_ops_kern *bpf_sock,
 				 const void *from, u32 len, u64 flags);
 
 #ifdef CONFIG_NET
+u64 bpf_skb_load_bytes(u64 r1, u64 r2, u64 r3, u64 r4, u64 r5);
+u64 bpf_skb_load_bytes_relative(u64 r1, u64 r2, u64 r3, u64 r4, u64 r5);
 int __bpf_skb_load_bytes(const struct sk_buff *skb, u32 offset, void *to, u32 len);
 int __bpf_skb_store_bytes(struct sk_buff *skb, u32 offset, const void *from,
 			  u32 len, u64 flags);
