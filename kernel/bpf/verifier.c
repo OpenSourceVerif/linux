@@ -21826,6 +21826,40 @@ static void sanitize_dead_code(struct bpf_verifier_env *env)
 	}
 }
 
+static int save_interp_helper_calls(struct bpf_verifier_env *env)
+{
+	struct bpf_prog *prog = env->prog;
+	struct bpf_interp_helper_call *calls;
+	u32 i, count = 0;
+
+	/* Aux data follows instruction expansion/removal. Collect only calls
+	 * that survived rewriting, after the last instruction insertion pass.
+	 */
+	for (i = 0; i < prog->len; i++)
+		if (env->insn_aux_data[i].interp_helper_id &&
+		    prog->insnsi[i].code == (BPF_JMP | BPF_CALL) &&
+		    !prog->insnsi[i].src_reg)
+			count++;
+	if (!count)
+		return 0;
+
+	calls = kvcalloc(count, sizeof(*calls), GFP_KERNEL_ACCOUNT);
+	if (!calls)
+		return -ENOMEM;
+	prog->aux->interp_helper_calls = calls;
+	prog->aux->interp_helper_call_cnt = count;
+	for (i = 0; i < prog->len; i++) {
+		if (!env->insn_aux_data[i].interp_helper_id ||
+		    prog->insnsi[i].code != (BPF_JMP | BPF_CALL) ||
+		    prog->insnsi[i].src_reg)
+			continue;
+		calls->pc = i;
+		calls->helper_id = env->insn_aux_data[i].interp_helper_id;
+		calls++;
+	}
+	return 0;
+}
+
 static void free_states(struct bpf_verifier_env *env)
 {
 	struct bpf_verifier_state_list *sl;
@@ -24260,6 +24294,8 @@ skip_full_check:
 								     : false;
 	}
 
+	if (ret == 0)
+		ret = save_interp_helper_calls(env);
 	if (ret == 0)
 		ret = bpf_fixup_call_args(env);
 
