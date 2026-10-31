@@ -9833,6 +9833,21 @@ static int check_func_arg(struct bpf_verifier_env *env, u32 arg, u32 slot, u32 p
 
 	/* Preserve the legacy helper behavior for privileged pointer leaks. */
 	if (arg_type == ARG_ANYTHING) {
+		/* Capture mode keeps pointer-leak checks enabled. A privileged
+		 * probe_read_kernel may still read a verified, initialized stack
+		 * buffer, including a suspended caller's frame. Check its bounds
+		 * and contents instead of treating it as an arbitrary scalar.
+		 */
+		if (is_helper_call(meta, BPF_FUNC_probe_read_kernel) &&
+		    regno == BPF_REG_3 && env->bpf_capable &&
+		    !env->allow_ptr_leaks && reg->type == PTR_TO_STACK) {
+			u64 size = regs[BPF_REG_2].umax_value;
+
+			if (size > MAX_BPF_STACK)
+				return -EACCES;
+			return check_helper_mem_access(env, reg, argno, size, BPF_READ,
+						       true, NULL, NULL);
+		}
 		if (__is_pointer_value(env->allow_ptr_leaks, reg)) {
 			verbose(env, "%s leaks addr into helper function\n",
 				reg_arg_name(env, argno));
@@ -24032,14 +24047,17 @@ int bpf_check(struct bpf_prog **prog, union bpf_attr *attr, bpfptr_t uattr,
 		env->allow_uninit_stack = false;
 		env->bypass_spec_v1 = false;
 		env->bypass_spec_v4 = false;
-		env->bpf_capable = is_priv = false;
 	} else {
 		env->allow_ptr_leaks = bpf_allow_ptr_leaks(env->prog->aux->token);
 		env->allow_uninit_stack = bpf_allow_uninit_stack(env->prog->aux->token);
 		env->bypass_spec_v1 = bpf_bypass_spec_v1(env->prog->aux->token);
 		env->bypass_spec_v4 = bpf_bypass_spec_v4(env->prog->aux->token);
-		env->bpf_capable = is_priv = bpf_token_capable(env->prog->aux->token, CAP_BPF);
 	}
+	/* Keep the capture restrictions above, but use the loader's actual
+	 * capabilities for privileged features such as subprograms and loops.
+	 */
+	env->bpf_capable = is_priv = bpf_token_capable(env->prog->aux->token, CAP_BPF);
+
 	env->signature = attr->signature;
 
 	/* user could have requested verbose verifier output
