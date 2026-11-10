@@ -9864,6 +9864,21 @@ static int check_func_arg(struct bpf_verifier_env *env, u32 arg,
 		return err;
 
 	if (arg_type == ARG_ANYTHING) {
+		/* Capture mode keeps pointer-leak checks enabled. A privileged
+		 * probe_read_kernel may still read a verified, initialized stack
+		 * buffer, including a suspended caller's frame. Check its bounds
+		 * and contents instead of treating it as an arbitrary scalar.
+		 */
+		if (meta->func_id == BPF_FUNC_probe_read_kernel &&
+		    regno == BPF_REG_3 && env->bpf_capable &&
+		    !env->allow_ptr_leaks && type == PTR_TO_STACK) {
+			u64 size = cur_regs(env)[BPF_REG_2].umax_value;
+
+			if (size > MAX_BPF_STACK)
+				return -EACCES;
+			return check_helper_mem_access(env, regno, size, BPF_READ,
+						       true, NULL);
+		}
 		if (is_pointer_value(env, regno)) {
 			verbose(env, "R%d leaks addr into helper function\n",
 				regno);
@@ -23068,6 +23083,40 @@ out_undo_insn:
 	return err;
 }
 
+static int save_interp_helper_calls(struct bpf_verifier_env *env)
+{
+	struct bpf_prog *prog = env->prog;
+	struct bpf_interp_helper_call *calls;
+	u32 i, count = 0;
+
+	/* Aux data follows instruction expansion/removal. Collect only calls
+	 * that survived rewriting, after the last instruction insertion pass.
+	 */
+	for (i = 0; i < prog->len; i++)
+		if (env->insn_aux_data[i].interp_helper_id &&
+		    prog->insnsi[i].code == (BPF_JMP | BPF_CALL) &&
+		    !prog->insnsi[i].src_reg)
+			count++;
+	if (!count)
+		return 0;
+
+	calls = kvcalloc(count, sizeof(*calls), GFP_KERNEL_ACCOUNT);
+	if (!calls)
+		return -ENOMEM;
+	prog->aux->interp_helper_calls = calls;
+	prog->aux->interp_helper_call_cnt = count;
+	for (i = 0; i < prog->len; i++) {
+		if (!env->insn_aux_data[i].interp_helper_id ||
+		    prog->insnsi[i].code != (BPF_JMP | BPF_CALL) ||
+		    prog->insnsi[i].src_reg)
+			continue;
+		calls->pc = i;
+		calls->helper_id = env->insn_aux_data[i].interp_helper_id;
+		calls++;
+	}
+	return 0;
+}
+
 static int fixup_call_args(struct bpf_verifier_env *env)
 {
 #ifndef CONFIG_BPF_JIT_ALWAYS_ON
@@ -23940,6 +23989,7 @@ static int do_misc_fixups(struct bpf_verifier_env *env)
 				     (void *(*)(struct bpf_map *map, void *key, u32 cpu))NULL));
 
 patch_map_ops_generic:
+			env->insn_aux_data[i + delta].interp_helper_id = insn->imm;
 			switch (insn->imm) {
 			case BPF_FUNC_map_lookup_elem:
 				insn->imm = BPF_CALL_IMM(ops->map_lookup_elem);
@@ -24223,6 +24273,7 @@ patch_map_ops_generic:
 			goto next_insn;
 		}
 patch_call_imm:
+		env->insn_aux_data[i + delta].interp_helper_id = insn->imm;
 		fn = env->ops->get_func_proto(insn->imm, env->prog);
 		/* all functions that have prototype and verifier allowed
 		 * programs to call them, must be real in-kernel functions
@@ -25976,14 +26027,16 @@ int bpf_check(struct bpf_prog **prog, union bpf_attr *attr, bpfptr_t uattr, __u3
 		env->allow_uninit_stack = false;
 		env->bypass_spec_v1 = false;
 		env->bypass_spec_v4 = false;
-		env->bpf_capable = is_priv = false;
 	} else {
 		env->allow_ptr_leaks = bpf_allow_ptr_leaks(env->prog->aux->token);
 		env->allow_uninit_stack = bpf_allow_uninit_stack(env->prog->aux->token);
 		env->bypass_spec_v1 = bpf_bypass_spec_v1(env->prog->aux->token);
 		env->bypass_spec_v4 = bpf_bypass_spec_v4(env->prog->aux->token);
-		env->bpf_capable = is_priv = bpf_token_capable(env->prog->aux->token, CAP_BPF);
 	}
+	/* Keep the capture restrictions above, but use the loader's actual
+	 * capabilities for privileged features such as subprograms and loops.
+	 */
+	env->bpf_capable = is_priv = bpf_token_capable(env->prog->aux->token, CAP_BPF);
 
 	bpf_get_btf_vmlinux();
 
@@ -26138,6 +26191,8 @@ skip_full_check:
 								     : false;
 	}
 
+	if (ret == 0)
+		ret = save_interp_helper_calls(env);
 	if (ret == 0)
 		ret = fixup_call_args(env);
 
