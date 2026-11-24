@@ -2448,6 +2448,7 @@ int bpf_do_misc_fixups(struct bpf_verifier_env *env)
 				     (void *(*)(struct bpf_map *map, void *key, u32 cpu))NULL));
 
 patch_map_ops_generic:
+			env->insn_aux_data[i + delta].interp_helper_id = insn->imm;
 			switch (insn->imm) {
 			case BPF_FUNC_map_lookup_elem:
 				insn->imm = BPF_CALL_IMM(ops->map_lookup_elem);
@@ -2735,6 +2736,7 @@ patch_map_ops_generic:
 			goto next_insn;
 		}
 patch_call_imm:
+		env->insn_aux_data[i + delta].interp_helper_id = insn->imm;
 		fn = env->ops->get_func_proto(insn->imm, env->prog);
 		/* all functions that have prototype and verifier allowed
 		 * programs to call them, must be real in-kernel functions
