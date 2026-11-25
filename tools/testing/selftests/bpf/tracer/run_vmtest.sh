@@ -34,7 +34,7 @@ Build the kernel and tracer, boot the vmtest VM, run the selected tracing
 experiment, and write JSON files to a host directory.
 
 Options:
-  --suite <smoke|map-helper|helper-memory|test_progs|test_bpf|all>
+  --suite <smoke|map-helper|helper-memory|test_progs|all>
                               Experiment suite (default: smoke)
   --test <name>               test_progs test name; may be repeated
   --output <directory>        Result directory
@@ -95,7 +95,7 @@ while (($#)); do
 done
 
 case "${SUITE}" in
-smoke|map-helper|helper-memory|test_progs|test_bpf|all) ;;
+smoke|map-helper|helper-memory|test_progs|all) ;;
 *)
 	echo "Unknown suite: ${SUITE}" >&2
 	exit 2
@@ -174,7 +174,7 @@ check_json_results()
 	local file state
 
 	shopt -s nullglob
-	for file in "${RESULTS_DIR}"/{test_progs,test_bpf}/*.json{,.tmp}; do
+	for file in "${RESULTS_DIR}"/test_progs/*.json{,.tmp}; do
 		if [[ "${file}" == *.tmp ]] || ! state="$(jq -sr '
 			if length != 1 or (.[0] | type) != "array" then error("expected one run array")
 			else .[0] | if length == 0 then "empty"

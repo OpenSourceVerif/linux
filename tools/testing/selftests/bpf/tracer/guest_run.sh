@@ -8,7 +8,6 @@ shift || true
 TRACER_DIR="/root/bpf/tracer"
 OUTPUT_ROOT="/output"
 TEST_PROGS_BIN="/root/bpf/test_progs"
-TEST_BPF_MODULE="/root/bpf/test_bpf.ko"
 
 if [ ! -d "${OUTPUT_ROOT}" ] || [ ! -w "${OUTPUT_ROOT}" ]; then
 	echo "The vmtest output share is not mounted at ${OUTPUT_ROOT}" >&2
@@ -20,7 +19,7 @@ if [ ! -x "${TRACER_DIR}/trace_user" ]; then
 	exit 1
 fi
 
-mkdir -p "${OUTPUT_ROOT}/test_progs" "${OUTPUT_ROOT}/test_bpf"
+mkdir -p "${OUTPUT_ROOT}/test_progs"
 uname -a > "${OUTPUT_ROOT}/guest-uname.txt"
 cat /proc/cmdline > "${OUTPUT_ROOT}/guest-cmdline.txt"
 
@@ -29,13 +28,6 @@ run_test_progs()
 	TRACE_OUTPUT_DIR="${OUTPUT_ROOT}/test_progs" \
 	TEST_PROGS_BIN="${TEST_PROGS_BIN}" \
 		"${TRACER_DIR}/run_traces.sh" "$@"
-}
-
-run_test_bpf()
-{
-	TRACE_OUTPUT_DIR="${OUTPUT_ROOT}/test_bpf" \
-	TEST_BPF_MODULE="${TEST_BPF_MODULE}" \
-		"${TRACER_DIR}/run_test_bpf.sh"
 }
 
 run_smoke()
@@ -79,15 +71,8 @@ helper-memory)
 smoke)
 	run_smoke
 	;;
-test_progs)
+test_progs|all)
 	run_test_progs "$@"
-	;;
-test_bpf)
-	run_test_bpf
-	;;
-all)
-	run_test_progs
-	run_test_bpf
 	;;
 *)
 	echo "Unknown suite: ${SUITE}" >&2

@@ -2,8 +2,8 @@
 
 ## One-command VM workflow
 
-The host workflow builds the kernel, BPF selftests, tracer, and
-`lib/test_bpf.ko`; installs them into a libbpf CI rootfs; boots the kernel with
+The host workflow builds the kernel, BPF selftests, and tracer; installs
+them into a libbpf CI rootfs; boots the kernel with
 QEMU; runs the selected experiment; and writes JSON files directly to a host
 directory.
 
@@ -40,11 +40,9 @@ Available suites:
 # All non-blacklisted test_progs tests.
 ./tools/testing/selftests/bpf/tracer/run_vmtest.sh --suite test_progs
 
-# The test_bpf experiment.
-./tools/testing/selftests/bpf/tracer/run_vmtest.sh --suite test_bpf
-
-# Both complete experiments.
-./tools/testing/selftests/bpf/tracer/run_vmtest.sh --suite all
+# Upstream instruction tests use the same test_progs path.
+./tools/testing/selftests/bpf/tracer/run_vmtest.sh \
+  --suite test_progs --test jit_insns
 ```
 
 Results are placed under `tracer/results/<timestamp>-<suite>/` by default.
@@ -53,7 +51,7 @@ the JSON traces, VM console logs, guest kernel information, the suite name,
 and the guest exit status. Record the tested Git commit separately; the host
 script currently does not write it automatically. JSON status checks run on
 the host after the VM exits and leave all files in place. Primary outputs
-are under `test_progs/` and `test_bpf/`; expected unsupported and incomplete
+are under `test_progs/`; expected unsupported and incomplete
 fixtures from the helper suites are under `diagnostics/`.
 
 The host status check examines primary output files and requires at least
@@ -61,6 +59,11 @@ one non-empty file whose runs all have complete capture status. It does not
 check the expected program set or diagnostic contents. Those require separate
 content checks; the status summary alone does not establish suite coverage
 or successful semantic replay.
+
+The `jit_insns` family uses the ordinary `test_progs` capture path. Its
+programs remain subject to the interpreter capture limits and verifier
+restrictions, including unsupported instructions and context accesses;
+selecting the test does not guarantee complete capture of every subtest.
 
 KVM is required by default. `--allow-tcg` permits QEMU emulation for a smoke
 run, but complete suites are expected to be prohibitively slow without KVM.
@@ -113,7 +116,7 @@ interpreter instructions and helper identities. Memory records contain
 bounded chunks read while the producer's source address is live.
 
 Capture uses the interpreter with JIT disabled and selects tasks whose
-names begin with `test_progs` or `insmod`. The legacy `bpf_interp_hook_*`
+names begin with `test_progs`. The legacy `bpf_interp_hook_*`
 fentry interface has been replaced by this event protocol. The kernel and
 observer share a private ABI and must be rebuilt together.
 
@@ -194,6 +197,5 @@ checked separately from both the host status summary and semantic replay.
 ### Scripts
 
 * [run_traces.sh](run_traces.sh): capture selected or unblacklisted `test_progs` tests.
-* [run_test_bpf.sh](run_test_bpf.sh): capture the `test_bpf` module experiment.
 * [helper_memory_smoke.sh](helper_memory_smoke.sh): run helper-memory fixtures.
 * [map_helper_smoke.sh](map_helper_smoke.sh): run map fixtures and helper-memory fixtures.

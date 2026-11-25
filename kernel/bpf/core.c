@@ -2802,8 +2802,7 @@ static unsigned int PROG_NAME(stack_size)(const void *ctx, const struct bpf_insn
 	prog_ptr = old_prog; \
 	if (trace_bpf_interp_enabled() && !this_cpu_read(bpf_trace_active) && \
 	    prog_ptr && prog_ptr->aux && \
-	    (!strncmp(current->comm, "test_progs", 10) || \
-	     !strncmp(current->comm, "insmod", 6))) { \
+	    !strncmp(current->comm, "test_progs", 10)) { \
 		if (old_state) \
 			interp_trace_reason(old_state, TRACE_CALLBACK, TRACE_UNSUPPORTED); \
 		state = kzalloc(sizeof(*state), GFP_ATOMIC | __GFP_NOWARN); \

@@ -5365,8 +5365,7 @@ static bool is_var_ctx_off_allowed(struct bpf_prog *prog)
 static int __check_ctx_access(struct bpf_verifier_env *env, int insn_idx, int off, int size,
 			      enum bpf_access_type t, struct bpf_insn_access_aux *info)
 {
-	bool is_target_task = (strncmp(current->comm, "test_progs", 10) == 0 ||
-                        	strncmp(current->comm, "insmod", 6) == 0);
+	bool is_target_task = strncmp(current->comm, "test_progs", 10) == 0;
 	if (is_target_task && t == BPF_READ) {
 		verbose(env, "test_mode: load from ctx is forbidden at insn %d\n", insn_idx);
 		return -EACCES;
@@ -9841,7 +9840,7 @@ static int check_func_arg(struct bpf_verifier_env *env, u32 arg, u32 slot, u32 p
 		if (is_helper_call(meta, BPF_FUNC_probe_read_kernel) &&
 		    regno == BPF_REG_3 && env->bpf_capable &&
 		    !env->allow_ptr_leaks && reg->type == PTR_TO_STACK) {
-			u64 size = regs[BPF_REG_2].umax_value;
+			u64 size = reg_umax(&regs[BPF_REG_2]);
 
 			if (size > MAX_BPF_STACK)
 				return -EACCES;
@@ -24008,8 +24007,7 @@ int bpf_check(struct bpf_prog **prog, union bpf_attr *attr, bpfptr_t uattr,
 	if (ARRAY_SIZE(bpf_verifier_ops) == 0)
 		return -EINVAL;
 
-	is_target_task = (strncmp(current->comm, "test_progs", 10) == 0 ||
-                          strncmp(current->comm, "insmod", 6) == 0);
+	is_target_task = strncmp(current->comm, "test_progs", 10) == 0;
 	/* =========================================================
          * FOR COQ VERIFICATION: FAIL FAST
          * Reject programs containing atomic instructions (0xc3, 0xdb).

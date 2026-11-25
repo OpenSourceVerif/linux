@@ -216,7 +216,6 @@ update_selftests()
 	local make_command="$2"
 	local kernel_build_dir="$3"
 	local selftests_dir="${kernel_checkout}/tools/testing/selftests/bpf"
-	local test_bpf_module="${kernel_build_dir}/lib/test_bpf.ko"
 	local mount_dir="${OUTPUT_DIR}/${MOUNT_DIR}"
 	local build_targets="${BPF_VMTEST_BUILD_TARGETS:-}"
 
@@ -224,16 +223,10 @@ update_selftests()
 	${make_command} ${build_targets}
 	make -C tracer ARCH="${ARCH}" VMLINUX_BTF="${kernel_build_dir}/vmlinux"
 
-	if [[ ! -f "${test_bpf_module}" ]]; then
-		echo "Could not find ${test_bpf_module}" >&2
-		exit 1
-	fi
-
 	# Mount the image and copy the selftests to the image.
 	mount_image
 	sudo rm -rf "${mount_dir}/root/bpf"
 	sudo cp -r "${selftests_dir}" "${mount_dir}/root"
-	sudo install -m 0644 "${test_bpf_module}" "${mount_dir}/root/bpf/test_bpf.ko"
 	unmount_image
 }
 
